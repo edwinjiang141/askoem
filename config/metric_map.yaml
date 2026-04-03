@@ -1,0 +1,42 @@
+oem_api:
+  default_base_url: "https://192.168.30.230:7803/em/api"
+  timeout_seconds: 20
+  verify_ssl: false
+  endpoints:
+    targets: "/em/api/targets"
+    metric_time_series: "/em/api/metricTimeSeries"
+    incidents: "/em/api/incidents"
+    incident_events: "/em/api/incidents/{incidentId}/events"
+    metric_groups_by_target: "/em/api/targets/{targetId}/metricGroups"
+    target_by_id: "/em/api/targets/{targetId}"
+    target_properties_by_target: "/em/api/targets/{targetId}/properties"
+    latest_data_by_target: "/em/api/targets/{targetId}/metricGroups/{metricGroupName}/latestData"
+
+intent_metric_map:
+  host_cpu_usage:
+    intent_hints: ["cpu", "处理器", "负载", "cpu利用率"]
+    metric_keys: ["CpuUtilization"]
+    target_type_name: "host"
+    metric_group_name: "Load"
+    metric_name: "cpuUtil"
+  host_filesystem_usage:
+    intent_hints: ["文件系统", "磁盘使用率", "filesystem", "磁盘空间"]
+    metric_keys: ["FilesystemUsagePct"]
+    target_type_name: "host"
+    metric_group_name: "Filesystems"
+    metric_name: "pctAvailable"
+
+metric_thresholds:
+  CpuUtilization:
+    warning: ">=80"
+    critical: ">=90"
+    unit: "%"
+  FilesystemUsagePct:
+    warning: "<=20"
+    critical: "<=10"
+    unit: "%free"
+
+grafana_links:
+  host_cpu_usage: "https://grafana.example.local/d/host-cpu-overview"
+  host_filesystem_usage: "https://grafana.example.local/d/host-filesystem-overview"
+  default: "https://grafana.example.local"
