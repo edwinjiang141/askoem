@@ -127,6 +127,97 @@ class OemClient:
             events=_as_list(events),
         )
 
+    def list_recent_incidents(
+        self,
+        session: OemSession,
+        endpoints: dict[str, str],
+        target_name: str | None = None,
+        target_type_name: str | None = None,
+        scenario: str | None = None,
+        question: str | None = None,
+        age_hours: int = 24,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "ageInHoursLessThanOrEqualTo": max(1, age_hours),
+            "limit": max(1, min(limit, 200)),
+        }
+        if target_name:
+            params["targetName"] = target_name
+        if target_type_name:
+            params["targetTypeName"] = target_type_name
+        # [临时兼容策略 - 请勿删除]
+        # 当前测试环境 OEM 版本较低，不支持 /em/api/incidents 接口。
+        # 为了先跑通“告警识别 -> SOP 输出”的整体链路，这里暂时屏蔽真实 incidents 拉取，
+        # 直接返回一个模拟 incidents 样本给后续流程使用。
+        #
+        # 等 OEM 版本升级后，恢复下面注释掉的真实调用代码即可：
+        # payload = self._get_json(
+        #     session.oem_base_url,
+        #     endpoints["incidents"],
+        #     auth=(session.username, session.password),
+        #     params=params,
+        # )
+        # return _extract_items(payload)
+        return [
+            self._build_mock_incident(
+                target_name=target_name,
+                target_type_name=target_type_name,
+                scenario=scenario,
+                question=question,
+            )
+        ]
+
+    @staticmethod
+    def _build_mock_incident(
+        target_name: str | None,
+        target_type_name: str | None,
+        scenario: str | None = None,
+        question: str | None = None,
+    ) -> dict[str, Any]:
+        # 模拟数据尽量贴近用户提问语义，例如：
+        # “host01 主机 CPU 在 10:30 冲高”
+        # 这样可以在 OEM 低版本时仍保持后续 SOP 输出逻辑稳定。
+        target = target_name or "mock-target"
+        text = (question or "").strip()
+        time_hint = "最近1小时"
+        for marker in ("10:", "11:", "12:", "13:", "14:", "15:", "16:", "17:", "18:", "19:", "20:", "21:", "22:", "23:", "00:", "01:", "02:", "03:", "04:", "05:", "06:", "07:", "08:", "09:"):
+            if marker in text:
+                idx = text.find(marker)
+                time_hint = text[max(0, idx - 2) : idx + 5].strip()
+                break
+        if scenario == "cpu_high":
+            msg = f"{target} 主机 CPU 在 {time_hint} 冲高（模拟告警，OEM低版本兼容）"
+        elif scenario == "io_high":
+            msg = f"{target} 主机 IO 读在 {time_hint} 冲高（模拟告警，OEM低版本兼容）"
+        elif scenario == "hardware_hba_disk":
+            msg = f"{target} 主机 HBA/Disk 出现硬件异常（模拟告警，OEM低版本兼容）"
+        else:
+            msg = f"{target} 主机出现通用告警（模拟告警，OEM低版本兼容）"
+        return {
+            "id": "MOCK-INCIDENT-001",
+            "name": "Mock Incident For Low OEM Version",
+            "severity": "CRITICAL",
+            "status": "OPEN",
+            "message": msg,
+            "targetName": target,
+            "targetTypeName": target_type_name or "host",
+            "source": "mock_fallback",
+        }
+
+    def list_events_by_incidents(
+        self,
+        session: OemSession,
+        endpoints: dict[str, str],
+        incidents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        return self._fetch_events_from_incidents(
+            base_url=session.oem_base_url,
+            auth=(session.username, session.password),
+            incident_events_endpoint=endpoints["incident_events"],
+            incidents=incidents,
+        )
+
     def list_metric_groups(
         self,
         session: OemSession,
@@ -758,4 +849,3 @@ def _extract_next_page_token(value: Any) -> str | None:
     if amp >= 0:
         token = token[:amp]
     return token or None
-
