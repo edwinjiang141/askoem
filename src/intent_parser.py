@@ -15,6 +15,11 @@ INTENT_TARGET_LIST = "目标清单"
 INTENT_METRIC_LIST = "监控项清单"
 
 
+def is_alert_related_question(question: str) -> bool:
+    q = question.lower()
+    return any(k in q for k in ["告警", "报警", "incident", "event", "cpu高", "逻辑读", "物理读", "hba", "disk"])
+
+
 @dataclass
 class ParsedIntent:
     intent_type: str
@@ -192,4 +197,3 @@ def parse_intent(question: str, intent_metric_map: dict[str, Any]) -> ParsedInte
         need_follow_up=False,
         follow_up_question=None,
     )
-

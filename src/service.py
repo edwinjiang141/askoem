@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from src.auth_session import OemSession, SessionCache
-from src.intent_parser import INTENT_METRIC_LIST, INTENT_TARGET_LIST, parse_intent
+from src.alert_router import classify_alert_scenario
+from src.intent_parser import INTENT_METRIC_LIST, INTENT_TARGET_LIST, is_alert_related_question, parse_intent
 from src.knowledge_base import SingleDocKnowledgeBase
+from src.llm_classifier import LlmIntentClassifier
 from src.metric_config import MetricConfig
 from src.oem_client import OemClient
+from src.sop_engine import build_sop_recommendation
 
 
 @dataclass
@@ -26,6 +29,7 @@ class AskOpsService:
             timeout_seconds=config.timeout_seconds,
             verify_ssl=config.verify_ssl,
         )
+        self._llm_classifier = LlmIntentClassifier(timeout_seconds=min(config.timeout_seconds, 15))
 
     def login(self, oem_base_url: str, username: str, password: str) -> str:
         resolved_base_url = oem_base_url or self._config.default_base_url
@@ -54,6 +58,20 @@ class AskOpsService:
         username: Optional[str] = None,
         password: Optional[str] = None,
     ) -> AskOpsResult:
+        # 告警类问题（例如“当前有哪些告警，如何处理”）的总入口说明：
+        # 1) ask() 先做轻量问题分流：若命中告警关键词，直接进入 _ask_alert()。
+        # 2) _ask_alert() 中先解析 target（若有），并做场景识别：
+        #    - 规则优先（alert_router）
+        #    - 低置信度时可选 LLM 兜底分类
+        # 3) 基于 OEM REST API 拉取数据（只读）：
+        #    - incidents（主）
+        #    - incident 对应 events（主）
+        # 4) 将“场景 + incidents/events 证据”送入 SOP 引擎，输出固定结构建议文本。
+        # 5) 返回 final_result 给 MCP 调用方（Cline/VS Code）。
+        # 当前版本刻意不做自动修复动作，也不执行写操作，保证可控和可审计。
+        if is_alert_related_question(question):
+            return self._ask_alert(question, session_id, oem_base_url, username, password)
+
         parsed = parse_intent(question, self._config.intent_metric_map)
         if parsed.need_follow_up:
             return AskOpsResult(
@@ -155,6 +173,87 @@ class AskOpsService:
             final_result=final_result,
         )
 
+    def _ask_alert(
+        self,
+        question: str,
+        session_id: Optional[str],
+        oem_base_url: Optional[str],
+        username: Optional[str],
+        password: Optional[str],
+    ) -> AskOpsResult:
+        # _ask_alert() = 告警处理编排主流程（面向“当前有哪些告警，如何处理”）
+        #
+        # 输入：
+        # - question: 用户自然语言问题
+        # - session_id 或认证参数: 用于 OEM REST 只读访问
+        #
+        # 输出：
+        # - AskOpsResult.final_result: 包含场景识别 + 证据来源 + SOP 建议
+        #
+        # 子步骤：
+        # A. 会话解析：复用已有登录态（或按参数新建会话）
+        # B. 意图解析：提取 target_name / target_type（若问题中有对象）
+        # C. 场景识别：rule-first, LLM-fallback（由 alert_router 实现）
+        # D. 规则校验：若场景要求 target 但未提供，则返回追问
+        # E. 数据采集：仅采 incidents + events（OEM 主路径）
+        # F. SOP 生成：调用 sop_engine 输出场景化处置建议
+        session = self._resolve_session(
+            session_id=session_id,
+            oem_base_url=oem_base_url,
+            username=username,
+            password=password,
+        )
+        parsed = parse_intent(question, self._config.intent_metric_map)
+        route = classify_alert_scenario(
+            question=question,
+            alert_scenarios=self._config.alert_scenarios,
+            llm=self._llm_classifier,
+        )
+        route_cfg = self._config.alert_scenarios.get(route.scenario, {})
+        if route_cfg.get("require_target") and not parsed.target_name:
+            return AskOpsResult(
+                session_id=session.session_id,
+                need_follow_up=True,
+                follow_up_question="该告警场景需要目标名称，请补充主机名（例如：host01）。",
+                final_result=None,
+            )
+
+        incidents = self._oem_client.list_recent_incidents(
+            session=session,
+            endpoints=self._config.endpoints,
+            target_name=parsed.target_name,
+            target_type_name=parsed.target_type_name if parsed.target_name else None,
+            age_hours=24,
+            limit=50,
+        )
+        events = self._oem_client.list_events_by_incidents(
+            session=session,
+            endpoints=self._config.endpoints,
+            incidents=incidents,
+        )
+
+        # 统一返回格式（供前端/插件稳定渲染）：
+        # - 第一行：场景识别结果（可审计）
+        # - 第二行：数据来源说明（避免“模型臆断”）
+        # - 其后：SOP建议正文（固定步骤）
+        final_result = (
+            f"告警识别结果: {route.scenario} (classifier={route.classifier}, confidence={route.confidence:.2f})\n"
+            "数据来源: OEM incidents/events（主）\n"
+            + build_sop_recommendation(
+                scenario=route.scenario,
+                target_name=parsed.target_name,
+                incidents=incidents,
+                events=events,
+                metric_bundle=None,
+            )
+        )
+        return AskOpsResult(
+            session_id=session.session_id,
+            need_follow_up=False,
+            follow_up_question=None,
+            final_result=final_result,
+        )
+
     @staticmethod
     def _merge_route_target_type(route_config: dict[str, Any], target_type_name: str) -> dict[str, Any]:
         merged = dict(route_config)
@@ -202,4 +301,3 @@ class AskOpsService:
         if not session:
             raise RuntimeError("会话创建失败，请重试。")
         return session
-
