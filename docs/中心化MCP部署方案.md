@@ -29,6 +29,14 @@
 2. 运行 `python -m src.mcp_server_http`。
 3. 各客户端配置远程 MCP 地址接入。
 
+示例（按客户端字段名适配）：
+
+```json
+"ai-gateway-mvp": {
+  "url": "http://<mcp-server-host>:8000/mcp"
+}
+```
+
 ## 3. 本仓库具体实现
 
 新增入口：`src/mcp_server_http.py`
@@ -44,6 +52,21 @@
 ```bash
 python -m src.mcp_server_http
 ```
+
+默认行为（兼容 Cline）：
+
+- transport: `sse`
+- mount path: `/mcp`
+
+可通过环境变量覆盖：
+
+```bash
+AI_GATEWAY_MCP_TRANSPORT=sse
+AI_GATEWAY_MCP_MOUNT_PATH=/mcp
+```
+
+> 若你在客户端看到 `GET /mcp 400 Bad Request`，通常是 transport 与客户端探测方式不匹配。  
+> 优先改用上面的 SSE 默认配置。
 
 ### 保持兼容
 
