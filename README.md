@@ -1,56 +1,65 @@
 # AI Gateway MCP MVP
 
-这个项目实现一个最小可运行的 AI Gateway，跑通以下 4 步流程：
+AI Gateway 的 MCP Server 最小实现，面向 OEM 只读问答场景。
 
-1. 识别问题
-2. 调 OEM REST API 取监控数据
-3. 查询单文档知识库
-4. 组织结构化回答
+当前主流程：
 
-主交付形态是 MCP Server，支持 VS Code/Cursor 等宿主调用。
+1. 识别问题意图与目标类型
+2. 调用 OEM REST API 取数
+3. （按需）查询单文档知识库
+4. 返回最终结果文本
 
-## 目录
+## 项目结构
 
-- `src/mcp_server.py`：MCP Server 入口，提供 `oem_login` 和 `ask_ops` 工具
-- `src/service.py`：流程编排
-- `src/intent_parser.py`：问题识别
-- `src/oem_client.py`：OEM REST 客户端（只读）
-- `src/auth_session.py`：每用户会话缓存（TTL 30 分钟）
+- `src/mcp_server.py`：MCP Server 入口（`oem_login`、`ask_ops`）
+- `src/service.py`：主流程编排与结果组织
+- `src/intent_parser.py`：意图识别、目标名抽取、目标类型识别
+- `src/oem_client.py`：OEM REST 客户端（只读，含兼容降级逻辑）
+- `src/auth_session.py`：会话缓存（TTL 30 分钟）
 - `src/knowledge_base.py`：单文档检索
-- `src/answer_composer.py`：固定 4 段回答输出
-- `config/metric_map.yaml`：指标映射、阈值、接口路径、Grafana 链接
+- `config/metric_map.yaml`：OEM 接口配置、默认地址、意图映射
 
-## 快速开始
+## 快速启动
 
 ### 1) 安装依赖
 
-```bash
-python -m venv .venv
-.venv\\Scripts\\activate
+Windows PowerShell:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2) 配置 OEM REST 接口路径
+Linux:
 
-编辑 `config/metric_map.yaml` 的 `oem_api`，确认以下配置：
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-- `default_base_url`（当前已设置为测试环境 `https://192.168.30.230:7803/em/api`）
-- `verify_ssl`（测试阶段建议 `false`，等效 curl 的 `-k`）
-- `endpoints`（按官方 `/em/api/...` 路径）
+### 2) 检查配置
 
-- `targets`
-- `metric_time_series`
-- `incidents`
-- `incident_events`
-- `latest_data_by_target`
+文件：`config/metric_map.yaml`
 
-当前实现兼容两种输入：
+关键项：
+
+- `oem_api.default_base_url`
+- `oem_api.verify_ssl`（测试环境可用 `false`）
+- `oem_api.endpoints.*`
+
+`default_base_url` 支持两种写法：
+
 - `https://host:port`
 - `https://host:port/em/api`
 
-无论传哪种，都会正确拼接到官方端点。
+### 3) MCP 启动说明
 
-### 3) 启动 MCP Server
+该服务是 **stdio MCP server**，应由 VS Code/Cursor/Cline 的 MCP 客户端拉起。  
+不要在交互终端手工输入请求内容。
+
+启动命令（供 MCP 配置使用）：
 
 ```bash
 python -m src.mcp_server
@@ -60,47 +69,46 @@ python -m src.mcp_server
 
 ### `oem_login`
 
-输入：
-- `oem_base_url`（可选；不传时使用配置里的 `default_base_url`）
+参数：
+
+- `oem_base_url`（可选，不传则用配置默认值）
 - `username`
 - `password`
 
-输出：
-- `session_id`（后续复用）
+返回：
+
+- `session_id`
 
 ### `ask_ops`
 
-输入：
+参数：
+
 - `question`（必填）
 - `session_id`（推荐）
-- 或 `oem_base_url + username + password`（没有 session 时）
-- `kb_path`（可选，默认用方案文档）
+- 或 `oem_base_url + username + password`
+- `kb_path`（可选）
 
-输出：
-- 若参数不足：`need_follow_up=true`，返回明确追问
-- 若执行成功：固定 4 段答案
-  - `conclusion`
-  - `evidence`
-  - `next_steps`
-  - `drill_down`
+返回（当前版本）：
 
-## 当前支持的试点指标
+- `ok`
+- `session_id`（成功时）
+- `result`（仅最终结果文本，不输出中间过程结构）
 
-- `Memory_HardwareCorrupted`
-- `DiskErrorCount`
+## 当前支持的通用查询示例
 
-阈值定义在 `config/metric_map.yaml`。
+- `列出当前监控主机的信息，并以表格形式返回`
+- `查看 19test1 的监控项有哪些`
+- `19test1 cpu 利用率多少`
 
-## 认证策略
+## 兼容性与容错
 
-- 每个用户使用自己的 OEM 账号密码
-- 首次登录后缓存 `session_id`
-- 会话 TTL 30 分钟，到期后必须重新登录
-- 认证方式使用 Basic Auth（符合 OEM REST 文档方式）
+- OEM 认证方式：Basic Auth
+- 对部分接口参数不兼容时自动降级重试（例如 `targets` 的 `include` 参数）
+- 对部分接口不可用时降级处理（例如某些环境 `metricGroups` 可能 404）
 
-## 注意
+## 注意事项
 
-- 第一阶段只读，不做写操作
+- 只读访问，不执行高风险写操作
 - 不直连 OEM repository 数据库
-- 知识库当前是单文档匹配，后续可替换为向量检索/RAG
+- 测试环境可关闭 SSL 校验，生产环境必须开启并使用有效证书
 
