@@ -29,3 +29,6 @@ if __name__ == "__main__":
         mcp.run(transport="sse", mount_path=mount_path)
     else:
         mcp.run(transport=transport)  # streamable-http / stdio
+    # 按 MCP 标准使用 streamable-http 传输，便于客户端远程连接。
+    # host/port 由 FastMCP settings 决定（可通过环境变量覆盖）。
+    mcp.run(transport="streamable-http")
