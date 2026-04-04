@@ -39,6 +39,10 @@ class MetricConfig:
     def grafana_links(self) -> dict[str, str]:
         return self.raw["grafana_links"]
 
+    @property
+    def alert_scenarios(self) -> dict[str, Any]:
+        return self.raw.get("alert_scenarios", {})
+
 
 def load_metric_config(path: str) -> MetricConfig:
     full_path = Path(path)
@@ -49,4 +53,3 @@ def load_metric_config(path: str) -> MetricConfig:
     if not isinstance(data, dict):
         raise ValueError("配置文件格式错误: 顶层必须是字典")
     return MetricConfig(raw=data)
-
