@@ -46,6 +46,11 @@ def ask_ops(
     2) 调 OEM REST API 取监控数据
     3) 查询单文档知识库
     4) 组织结构化回答
+
+    告警类问题会走 AskOpsService 的告警编排分支:
+    - 场景识别（规则优先 + 可选LLM兜底）
+    - 拉取 incidents/events
+    - 返回 SOP 化处理建议
     """
     result = service.ask(
         question=question,
