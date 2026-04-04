@@ -5,6 +5,12 @@ from typing import Any
 
 from src.llm_classifier import LlmIntentClassifier
 
+DEFAULT_ALERT_SCENARIOS: dict[str, dict[str, list[str]]] = {
+    "cpu_high": {"keywords": ["cpu", "处理器", "负载", "cpu高"]},
+    "io_high": {"keywords": ["io", "逻辑读", "物理读", "iops", "read"]},
+    "hardware_hba_disk": {"keywords": ["hba", "disk", "硬件", "磁盘", "硬盘"]},
+}
+
 
 @dataclass
 class AlertRouteResult:
@@ -26,6 +32,9 @@ def classify_alert_scenario(
     """
     q = question.lower()
     has_alert_word = any(k in q for k in ["告警", "报警", "incident", "event", "事件"])
+    scenarios = alert_scenarios if alert_scenarios else DEFAULT_ALERT_SCENARIOS
+
+    for scenario, cfg in scenarios.items():
 
     for scenario, cfg in alert_scenarios.items():
         keywords = [str(x).lower() for x in cfg.get("keywords", [])]

@@ -129,6 +129,8 @@ python -m src.mcp_server
    `_ask_alert()` 调用 `alert_router`：
    - 规则优先（配置关键词匹配）
    - 低置信度时可选 LLM 兜底分类
+4. **参数与上下文提取**  
+   从问题中尽量提取目标名/时间提示；若未提供目标，也会继续走模拟 incident + SOP 输出流程。
 4. **参数校验**  
    若场景要求目标名（如 CPU/IO），但问题中未给出目标，则返回追问。
 5. **OEM 数据采集（只读）**  
@@ -136,6 +138,7 @@ python -m src.mcp_server
    - `incidents`
    - `incident events`
 6. **SOP 生成**  
+   将 `场景 + incidents/events` 送入 `sop_engine`，输出固定模板建议（非 LLM 自由生成）。
    将 `场景 + incidents/events` 送入 `sop_engine`，输出固定模板建议。
 7. **结果返回**  
    返回结构化文本（识别结果 + 数据来源 + SOP建议）给 Cline/VS Code。
