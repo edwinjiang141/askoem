@@ -53,6 +53,7 @@ pip install -r requirements.txt
 
 - `https://host:port`
 - `https://host:port/em/api`
+- `https://host:port/em`（控制台入口，代码会自动拼接 REST 路径）
 
 ### 3) MCP 启动说明
 
