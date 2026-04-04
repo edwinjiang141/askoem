@@ -146,6 +146,7 @@ python -m src.mcp_server
 - 对部分接口参数不兼容时自动降级重试（例如 `targets` 的 `include` 参数）
 - 对部分接口不可用时降级处理（例如某些环境 `metricGroups` 可能 404）
 - 临时兼容：若测试环境 OEM 版本不支持 `/em/api/incidents`，当前代码会返回一个模拟 incident 以跑通 SOP 链路（代码内保留了恢复真实接口调用的注释位）
+- 临时兼容：低版本 OEM 也可能不支持 `.../metricGroups/.../latestData` 相关接口，当前告警流程不依赖该接口，使用“按提问内容构造模拟 incident”方式继续输出 CPU/IO SOP
 
 ## 注意事项
 

@@ -223,6 +223,8 @@ class AskOpsService:
             endpoints=self._config.endpoints,
             target_name=parsed.target_name,
             target_type_name=parsed.target_type_name if parsed.target_name else None,
+            scenario=route.scenario,
+            question=question,
             age_hours=24,
             limit=50,
         )

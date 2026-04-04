@@ -133,6 +133,8 @@ class OemClient:
         endpoints: dict[str, str],
         target_name: str | None = None,
         target_type_name: str | None = None,
+        scenario: str | None = None,
+        question: str | None = None,
         age_hours: int = 24,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
@@ -157,6 +159,41 @@ class OemClient:
         #     params=params,
         # )
         # return _extract_items(payload)
+        return [
+            self._build_mock_incident(
+                target_name=target_name,
+                target_type_name=target_type_name,
+                scenario=scenario,
+                question=question,
+            )
+        ]
+
+    @staticmethod
+    def _build_mock_incident(
+        target_name: str | None,
+        target_type_name: str | None,
+        scenario: str | None = None,
+        question: str | None = None,
+    ) -> dict[str, Any]:
+        # 模拟数据尽量贴近用户提问语义，例如：
+        # “host01 主机 CPU 在 10:30 冲高”
+        # 这样可以在 OEM 低版本时仍保持后续 SOP 输出逻辑稳定。
+        target = target_name or "mock-target"
+        text = (question or "").strip()
+        time_hint = "最近1小时"
+        for marker in ("10:", "11:", "12:", "13:", "14:", "15:", "16:", "17:", "18:", "19:", "20:", "21:", "22:", "23:", "00:", "01:", "02:", "03:", "04:", "05:", "06:", "07:", "08:", "09:"):
+            if marker in text:
+                idx = text.find(marker)
+                time_hint = text[max(0, idx - 2) : idx + 5].strip()
+                break
+        if scenario == "cpu_high":
+            msg = f"{target} 主机 CPU 在 {time_hint} 冲高（模拟告警，OEM低版本兼容）"
+        elif scenario == "io_high":
+            msg = f"{target} 主机 IO 读在 {time_hint} 冲高（模拟告警，OEM低版本兼容）"
+        elif scenario == "hardware_hba_disk":
+            msg = f"{target} 主机 HBA/Disk 出现硬件异常（模拟告警，OEM低版本兼容）"
+        else:
+            msg = f"{target} 主机出现通用告警（模拟告警，OEM低版本兼容）"
         return [self._build_mock_incident(target_name=target_name, target_type_name=target_type_name)]
 
     @staticmethod
@@ -166,6 +203,11 @@ class OemClient:
             "name": "Mock Incident For Low OEM Version",
             "severity": "CRITICAL",
             "status": "OPEN",
+            "message": msg,
+            "targetName": target,
+            "targetTypeName": target_type_name or "host",
+            "source": "mock_fallback",
+        }
             "message": "模拟告警：当前环境暂不支持 incidents API，使用模拟数据跑通流程。",
             "targetName": target_name or "mock-target",
             "targetTypeName": target_type_name or "host",
