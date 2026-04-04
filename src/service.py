@@ -209,6 +209,14 @@ class AskOpsService:
             alert_scenarios=self._config.alert_scenarios,
             llm=self._llm_classifier,
         )
+        route_cfg = self._config.alert_scenarios.get(route.scenario, {})
+        if route_cfg.get("require_target") and not parsed.target_name:
+            return AskOpsResult(
+                session_id=session.session_id,
+                need_follow_up=True,
+                follow_up_question="该告警场景需要目标名称，请补充主机名（例如：host01）。",
+                final_result=None,
+            )
 
         incidents = self._oem_client.list_recent_incidents(
             session=session,
