@@ -66,6 +66,26 @@ pip install -r requirements.txt
 python -m src.mcp_server
 ```
 
+### 4) 中心化部署（推荐，避免每个客户端部署源码）
+
+为避免“每个客户端都安装一份 Python 源码”，可使用 MCP 的 `streamable-http` 方式做中心化部署：
+
+```bash
+python -m src.mcp_server_http
+```
+
+说明：
+
+- `src.mcp_server_http` 与 `src.mcp_server` 复用同一套 tools/逻辑，不改已有功能。
+- 服务端集中部署 1 套即可，客户端通过网络连接该 MCP 服务。
+- 适合内网统一运维，便于版本管理和灰度升级。
+
+建议架构：
+
+1. 在一台统一服务器部署本项目（或容器化部署）。
+2. 运行 `python -m src.mcp_server_http` 暴露 MCP HTTP 服务。
+3. Cline/Cursor 客户端改为配置远程 MCP 地址，而不是本地 `command + args`。
+
 ## MCP 工具
 
 ### `oem_login`
