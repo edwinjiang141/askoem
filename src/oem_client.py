@@ -144,6 +144,33 @@ class OemClient:
             params["targetName"] = target_name
         if target_type_name:
             params["targetTypeName"] = target_type_name
+        # [临时兼容策略 - 请勿删除]
+        # 当前测试环境 OEM 版本较低，不支持 /em/api/incidents 接口。
+        # 为了先跑通“告警识别 -> SOP 输出”的整体链路，这里暂时屏蔽真实 incidents 拉取，
+        # 直接返回一个模拟 incidents 样本给后续流程使用。
+        #
+        # 等 OEM 版本升级后，恢复下面注释掉的真实调用代码即可：
+        # payload = self._get_json(
+        #     session.oem_base_url,
+        #     endpoints["incidents"],
+        #     auth=(session.username, session.password),
+        #     params=params,
+        # )
+        # return _extract_items(payload)
+        return [self._build_mock_incident(target_name=target_name, target_type_name=target_type_name)]
+
+    @staticmethod
+    def _build_mock_incident(target_name: str | None, target_type_name: str | None) -> dict[str, Any]:
+        return {
+            "id": "MOCK-INCIDENT-001",
+            "name": "Mock Incident For Low OEM Version",
+            "severity": "CRITICAL",
+            "status": "OPEN",
+            "message": "模拟告警：当前环境暂不支持 incidents API，使用模拟数据跑通流程。",
+            "targetName": target_name or "mock-target",
+            "targetTypeName": target_type_name or "host",
+            "source": "mock_fallback",
+        }
         payload = self._get_json(
             session.oem_base_url,
             endpoints["incidents"],

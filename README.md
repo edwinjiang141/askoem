@@ -145,6 +145,7 @@ python -m src.mcp_server
 - OEM 认证方式：Basic Auth
 - 对部分接口参数不兼容时自动降级重试（例如 `targets` 的 `include` 参数）
 - 对部分接口不可用时降级处理（例如某些环境 `metricGroups` 可能 404）
+- 临时兼容：若测试环境 OEM 版本不支持 `/em/api/incidents`，当前代码会返回一个模拟 incident 以跑通 SOP 链路（代码内保留了恢复真实接口调用的注释位）
 
 ## 注意事项
 
