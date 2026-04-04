@@ -25,6 +25,12 @@ intent_metric_map:
     target_type_name: "host"
     metric_group_name: "Filesystems"
     metric_name: "pctAvailable"
+  host_io_read:
+    intent_hints: ["io", "逻辑读", "物理读", "read", "iops"]
+    metric_keys: ["HostIoRead"]
+    target_type_name: "host"
+    metric_group_name: "DiskActivity"
+    metric_name: "readsPerSec"
 
 metric_thresholds:
   CpuUtilization:
@@ -40,3 +46,14 @@ grafana_links:
   host_cpu_usage: "https://grafana.example.local/d/host-cpu-overview"
   host_filesystem_usage: "https://grafana.example.local/d/host-filesystem-overview"
   default: "https://grafana.example.local"
+
+alert_scenarios:
+  cpu_high:
+    keywords: ["cpu", "处理器", "负载高", "cpu高"]
+    require_target: true
+  io_high:
+    keywords: ["io", "逻辑读", "physical read", "物理读", "读高", "iops"]
+    require_target: true
+  hardware_hba_disk:
+    keywords: ["hba", "disk", "硬件", "磁盘故障", "硬盘"]
+    require_target: false
