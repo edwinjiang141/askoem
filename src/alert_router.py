@@ -18,6 +18,12 @@ def classify_alert_scenario(
     alert_scenarios: dict[str, Any],
     llm: LlmIntentClassifier | None = None,
 ) -> AlertRouteResult:
+    """
+    告警场景识别（混合模式）：
+    1) 先按配置关键词进行规则匹配（稳定、可控）。
+    2) 若仅判定为 generic 且置信度低，再调用可选 LLM 分类器兜底。
+    说明：分类器只决定“场景标签”，不直接生成处置决策。
+    """
     q = question.lower()
     has_alert_word = any(k in q for k in ["告警", "报警", "incident", "event", "事件"])
 

@@ -12,6 +12,10 @@ def build_sop_recommendation(
     events: list[dict[str, Any]],
     metric_bundle: OemDataBundle | None = None,
 ) -> str:
+    """
+    SOP 引擎入口：根据场景标签选择固定模板。
+    输入证据仅来自 OEM 告警对象（incidents/events），避免自由推理。
+    """
     if scenario == "cpu_high":
         return _cpu_sop(target_name, incidents, events, metric_bundle)
     if scenario == "io_high":

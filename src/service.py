@@ -58,6 +58,17 @@ class AskOpsService:
         username: Optional[str] = None,
         password: Optional[str] = None,
     ) -> AskOpsResult:
+        # 告警类问题（例如“当前有哪些告警，如何处理”）的总入口说明：
+        # 1) ask() 先做轻量问题分流：若命中告警关键词，直接进入 _ask_alert()。
+        # 2) _ask_alert() 中先解析 target（若有），并做场景识别：
+        #    - 规则优先（alert_router）
+        #    - 低置信度时可选 LLM 兜底分类
+        # 3) 基于 OEM REST API 拉取数据（只读）：
+        #    - incidents（主）
+        #    - incident 对应 events（主）
+        # 4) 将“场景 + incidents/events 证据”送入 SOP 引擎，输出固定结构建议文本。
+        # 5) 返回 final_result 给 MCP 调用方（Cline/VS Code）。
+        # 当前版本刻意不做自动修复动作，也不执行写操作，保证可控和可审计。
         if is_alert_related_question(question):
             return self._ask_alert(question, session_id, oem_base_url, username, password)
 
@@ -170,6 +181,22 @@ class AskOpsService:
         username: Optional[str],
         password: Optional[str],
     ) -> AskOpsResult:
+        # _ask_alert() = 告警处理编排主流程（面向“当前有哪些告警，如何处理”）
+        #
+        # 输入：
+        # - question: 用户自然语言问题
+        # - session_id 或认证参数: 用于 OEM REST 只读访问
+        #
+        # 输出：
+        # - AskOpsResult.final_result: 包含场景识别 + 证据来源 + SOP 建议
+        #
+        # 子步骤：
+        # A. 会话解析：复用已有登录态（或按参数新建会话）
+        # B. 意图解析：提取 target_name / target_type（若问题中有对象）
+        # C. 场景识别：rule-first, LLM-fallback（由 alert_router 实现）
+        # D. 规则校验：若场景要求 target 但未提供，则返回追问
+        # E. 数据采集：仅采 incidents + events（OEM 主路径）
+        # F. SOP 生成：调用 sop_engine 输出场景化处置建议
         session = self._resolve_session(
             session_id=session_id,
             oem_base_url=oem_base_url,
@@ -205,6 +232,10 @@ class AskOpsService:
             incidents=incidents,
         )
 
+        # 统一返回格式（供前端/插件稳定渲染）：
+        # - 第一行：场景识别结果（可审计）
+        # - 第二行：数据来源说明（避免“模型臆断”）
+        # - 其后：SOP建议正文（固定步骤）
         final_result = (
             f"告警识别结果: {route.scenario} (classifier={route.classifier}, confidence={route.confidence:.2f})\n"
             "数据来源: OEM incidents/events（主）\n"
