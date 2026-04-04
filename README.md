@@ -99,16 +99,56 @@ python -m src.mcp_server
 - `列出当前监控主机的信息，并以表格形式返回`
 - `查看 19test1 的监控项有哪些`
 - `19test1 cpu 利用率多少`
+- `host01 最近 CPU 高告警怎么处理`
+- `host01 IO 逻辑读或者物理读高告警，给处理建议`
+
+## 告警处理（SOP 固化）
+
+当前实现采用混合识别模式：
+
+- 优先规则识别（稳定可控）
+- 规则不确定时再调用可选 LLM 分类（适配 Cline + DeepSeek）
+
+告警数据主来源为 **OEM incidents/events**（当前版本仅读取告警对象，不补充指标明细）。
+
+已内置场景：
+
+- CPU 高告警 SOP
+- IO 逻辑读/物理读高告警 SOP
+- 通用告警 SOP（无专用 SOP 时兜底）
+
+扩展方式：通过 `config/metric_map.yaml` 的 `alert_scenarios` 增加关键词、是否需要目标名，无需改动核心流程代码。
+
+### 告警问答端到端流程（示例：`当前有哪些告警，如何处理`）
+
+1. **MCP 入口接收问题**  
+   `ask_ops` 接收 `question` 后调用 `AskOpsService.ask()`。
+2. **问题分流**  
+   `ask()` 先判断是否为告警类问题，命中后进入 `_ask_alert()` 分支。
+3. **场景识别**  
+   `_ask_alert()` 调用 `alert_router`：
+   - 规则优先（配置关键词匹配）
+   - 低置信度时可选 LLM 兜底分类
+4. **参数校验**  
+   若场景要求目标名（如 CPU/IO），但问题中未给出目标，则返回追问。
+5. **OEM 数据采集（只读）**  
+   仅拉取：
+   - `incidents`
+   - `incident events`
+6. **SOP 生成**  
+   将 `场景 + incidents/events` 送入 `sop_engine`，输出固定模板建议。
+7. **结果返回**  
+   返回结构化文本（识别结果 + 数据来源 + SOP建议）给 Cline/VS Code。
 
 ## 兼容性与容错
 
 - OEM 认证方式：Basic Auth
 - 对部分接口参数不兼容时自动降级重试（例如 `targets` 的 `include` 参数）
 - 对部分接口不可用时降级处理（例如某些环境 `metricGroups` 可能 404）
+- 临时兼容：若测试环境 OEM 版本不支持 `/em/api/incidents`，当前代码会返回一个模拟 incident 以跑通 SOP 链路（代码内保留了恢复真实接口调用的注释位）
 
 ## 注意事项
 
 - 只读访问，不执行高风险写操作
 - 不直连 OEM repository 数据库
 - 测试环境可关闭 SSL 校验，生产环境必须开启并使用有效证书
-
