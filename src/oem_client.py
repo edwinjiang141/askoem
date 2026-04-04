@@ -775,17 +775,25 @@ class OemClient:
         兼容两种 base_url:
         1) https://host:port
         2) https://host:port/em/api
+        3) https://host:port/em  (OEM 控制台入口)
         并兼容 endpoint 以 /em/api 或 / 开头。
         """
         base = base_url.rstrip("/")
         ep = endpoint if endpoint.startswith("/") else f"/{endpoint}"
+        split = urlsplit(base)
+        root = f"{split.scheme}://{split.netloc}"
 
-        # base 已包含 /em/api 且 endpoint 也包含 /em/api 时，去重 endpoint 前缀。
-        if base.lower().endswith("/em/api") and ep.lower().startswith("/em/api/"):
-            ep = ep[len("/em/api") :]
+        # 关键兼容:
+        # 当 endpoint 为 /em/api/... 时，优先拼到站点根路径，避免 base=/em 时出现 /em/em/api 重复。
+        if ep.lower().startswith("/em/api/"):
+            if split.path.rstrip("/").lower().endswith("/em/api"):
+                # base 已经在 /em/api 下，去掉 endpoint 的 /em/api 前缀避免重复。
+                ep = ep[len("/em/api") :]
+                normalized_base = f"{root}{split.path.rstrip('/')}"
+                return f"{normalized_base}{ep}"
+            return f"{root}{ep}"
 
         # 规范化 base 中连续的 /。
-        split = urlsplit(base)
         normalized_base = f"{split.scheme}://{split.netloc}{split.path.rstrip('/')}"
         return f"{normalized_base}{ep}"
 
