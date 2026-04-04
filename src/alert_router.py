@@ -35,8 +35,6 @@ def classify_alert_scenario(
     scenarios = alert_scenarios if alert_scenarios else DEFAULT_ALERT_SCENARIOS
 
     for scenario, cfg in scenarios.items():
-
-    for scenario, cfg in alert_scenarios.items():
         keywords = [str(x).lower() for x in cfg.get("keywords", [])]
         if keywords and any(k in q for k in keywords) and has_alert_word:
             return AlertRouteResult(scenario, 0.95, "rule")

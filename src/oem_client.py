@@ -194,10 +194,6 @@ class OemClient:
             msg = f"{target} 主机 HBA/Disk 出现硬件异常（模拟告警，OEM低版本兼容）"
         else:
             msg = f"{target} 主机出现通用告警（模拟告警，OEM低版本兼容）"
-        return [self._build_mock_incident(target_name=target_name, target_type_name=target_type_name)]
-
-    @staticmethod
-    def _build_mock_incident(target_name: str | None, target_type_name: str | None) -> dict[str, Any]:
         return {
             "id": "MOCK-INCIDENT-001",
             "name": "Mock Incident For Low OEM Version",
@@ -208,18 +204,30 @@ class OemClient:
             "targetTypeName": target_type_name or "host",
             "source": "mock_fallback",
         }
-            "message": "模拟告警：当前环境暂不支持 incidents API，使用模拟数据跑通流程。",
-            "targetName": target_name or "mock-target",
-            "targetTypeName": target_type_name or "host",
-            "source": "mock_fallback",
-        }
-        payload = self._get_json(
-            session.oem_base_url,
-            endpoints["incidents"],
-            auth=(session.username, session.password),
-            params=params,
-        )
-        return _extract_items(payload)
+    # @staticmethod
+    # def _build_mock_incident(target_name: str | None, target_type_name: str | None) -> dict[str, Any]:
+    #     return {
+    #         "id": "MOCK-INCIDENT-001",
+    #         "name": "Mock Incident For Low OEM Version",
+    #         "severity": "CRITICAL",
+    #         "status": "OPEN",
+    #         "message": msg,
+    #         "targetName": target,
+    #         "targetTypeName": target_type_name or "host",
+    #         "source": "mock_fallback",
+    #     }
+    #         "message": "模拟告警：当前环境暂不支持 incidents API，使用模拟数据跑通流程。",
+    #         "targetName": target_name or "mock-target",
+    #         "targetTypeName": target_type_name or "host",
+    #         "source": "mock_fallback",
+    #     }
+    #     payload = self._get_json(
+    #         session.oem_base_url,
+    #         endpoints["incidents"],
+    #         auth=(session.username, session.password),
+    #         params=params,
+    #     )
+    #     return _extract_items(payload)
 
     def list_events_by_incidents(
         self,
