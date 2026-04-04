@@ -171,6 +171,13 @@ class OemClient:
             "targetTypeName": target_type_name or "host",
             "source": "mock_fallback",
         }
+        payload = self._get_json(
+            session.oem_base_url,
+            endpoints["incidents"],
+            auth=(session.username, session.password),
+            params=params,
+        )
+        return _extract_items(payload)
 
     def list_events_by_incidents(
         self,
