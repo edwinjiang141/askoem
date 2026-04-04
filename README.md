@@ -99,6 +99,25 @@ python -m src.mcp_server
 - `列出当前监控主机的信息，并以表格形式返回`
 - `查看 19test1 的监控项有哪些`
 - `19test1 cpu 利用率多少`
+- `host01 最近 CPU 高告警怎么处理`
+- `host01 IO 逻辑读或者物理读高告警，给处理建议`
+
+## 告警处理（SOP 固化）
+
+当前实现采用混合识别模式：
+
+- 优先规则识别（稳定可控）
+- 规则不确定时再调用可选 LLM 分类（适配 Cline + DeepSeek）
+
+告警数据主来源为 **OEM incidents/events**（当前版本仅读取告警对象，不补充指标明细）。
+
+已内置场景：
+
+- CPU 高告警 SOP
+- IO 逻辑读/物理读高告警 SOP
+- 通用告警 SOP（无专用 SOP 时兜底）
+
+扩展方式：通过 `config/metric_map.yaml` 的 `alert_scenarios` 增加关键词、是否需要目标名，无需改动核心流程代码。
 
 ## 兼容性与容错
 
@@ -111,4 +130,3 @@ python -m src.mcp_server
 - 只读访问，不执行高风险写操作
 - 不直连 OEM repository 数据库
 - 测试环境可关闭 SSL 校验，生产环境必须开启并使用有效证书
-

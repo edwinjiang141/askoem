@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from src.auth_session import OemSession, SessionCache
-from src.intent_parser import INTENT_METRIC_LIST, INTENT_TARGET_LIST, parse_intent
+from src.alert_router import classify_alert_scenario
+from src.intent_parser import INTENT_METRIC_LIST, INTENT_TARGET_LIST, is_alert_related_question, parse_intent
 from src.knowledge_base import SingleDocKnowledgeBase
+from src.llm_classifier import LlmIntentClassifier
 from src.metric_config import MetricConfig
 from src.oem_client import OemClient
+from src.sop_engine import build_sop_recommendation
 
 
 @dataclass
@@ -26,6 +29,7 @@ class AskOpsService:
             timeout_seconds=config.timeout_seconds,
             verify_ssl=config.verify_ssl,
         )
+        self._llm_classifier = LlmIntentClassifier(timeout_seconds=min(config.timeout_seconds, 15))
 
     def login(self, oem_base_url: str, username: str, password: str) -> str:
         resolved_base_url = oem_base_url or self._config.default_base_url
@@ -54,6 +58,9 @@ class AskOpsService:
         username: Optional[str] = None,
         password: Optional[str] = None,
     ) -> AskOpsResult:
+        if is_alert_related_question(question):
+            return self._ask_alert(question, session_id, oem_base_url, username, password)
+
         parsed = parse_intent(question, self._config.intent_metric_map)
         if parsed.need_follow_up:
             return AskOpsResult(
@@ -155,6 +162,67 @@ class AskOpsService:
             final_result=final_result,
         )
 
+    def _ask_alert(
+        self,
+        question: str,
+        session_id: Optional[str],
+        oem_base_url: Optional[str],
+        username: Optional[str],
+        password: Optional[str],
+    ) -> AskOpsResult:
+        session = self._resolve_session(
+            session_id=session_id,
+            oem_base_url=oem_base_url,
+            username=username,
+            password=password,
+        )
+        parsed = parse_intent(question, self._config.intent_metric_map)
+        route = classify_alert_scenario(
+            question=question,
+            alert_scenarios=self._config.alert_scenarios,
+            llm=self._llm_classifier,
+        )
+        route_cfg = self._config.alert_scenarios.get(route.scenario, {})
+        if route_cfg.get("require_target") and not parsed.target_name:
+            return AskOpsResult(
+                session_id=session.session_id,
+                need_follow_up=True,
+                follow_up_question="该告警场景需要目标名称，请补充主机名（例如：host01）。",
+                final_result=None,
+            )
+
+        incidents = self._oem_client.list_recent_incidents(
+            session=session,
+            endpoints=self._config.endpoints,
+            target_name=parsed.target_name,
+            target_type_name=parsed.target_type_name if parsed.target_name else None,
+            age_hours=24,
+            limit=50,
+        )
+        events = self._oem_client.list_events_by_incidents(
+            session=session,
+            endpoints=self._config.endpoints,
+            incidents=incidents,
+        )
+
+        final_result = (
+            f"告警识别结果: {route.scenario} (classifier={route.classifier}, confidence={route.confidence:.2f})\n"
+            "数据来源: OEM incidents/events（主）\n"
+            + build_sop_recommendation(
+                scenario=route.scenario,
+                target_name=parsed.target_name,
+                incidents=incidents,
+                events=events,
+                metric_bundle=None,
+            )
+        )
+        return AskOpsResult(
+            session_id=session.session_id,
+            need_follow_up=False,
+            follow_up_question=None,
+            final_result=final_result,
+        )
+
     @staticmethod
     def _merge_route_target_type(route_config: dict[str, Any], target_type_name: str) -> dict[str, Any]:
         merged = dict(route_config)
@@ -202,4 +270,3 @@ class AskOpsService:
         if not session:
             raise RuntimeError("会话创建失败，请重试。")
         return session
-

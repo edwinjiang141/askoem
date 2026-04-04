@@ -127,6 +127,44 @@ class OemClient:
             events=_as_list(events),
         )
 
+    def list_recent_incidents(
+        self,
+        session: OemSession,
+        endpoints: dict[str, str],
+        target_name: str | None = None,
+        target_type_name: str | None = None,
+        age_hours: int = 24,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "ageInHoursLessThanOrEqualTo": max(1, age_hours),
+            "limit": max(1, min(limit, 200)),
+        }
+        if target_name:
+            params["targetName"] = target_name
+        if target_type_name:
+            params["targetTypeName"] = target_type_name
+        payload = self._get_json(
+            session.oem_base_url,
+            endpoints["incidents"],
+            auth=(session.username, session.password),
+            params=params,
+        )
+        return _extract_items(payload)
+
+    def list_events_by_incidents(
+        self,
+        session: OemSession,
+        endpoints: dict[str, str],
+        incidents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        return self._fetch_events_from_incidents(
+            base_url=session.oem_base_url,
+            auth=(session.username, session.password),
+            incident_events_endpoint=endpoints["incident_events"],
+            incidents=incidents,
+        )
+
     def list_metric_groups(
         self,
         session: OemSession,
@@ -758,4 +796,3 @@ def _extract_next_page_token(value: Any) -> str | None:
     if amp >= 0:
         token = token[:amp]
     return token or None
-
