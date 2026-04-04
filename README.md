@@ -79,6 +79,14 @@ python -m src.mcp_server_http
 - `src.mcp_server_http` 与 `src.mcp_server` 复用同一套 tools/逻辑，不改已有功能。
 - 服务端集中部署 1 套即可，客户端通过网络连接该 MCP 服务。
 - 适合内网统一运维，便于版本管理和灰度升级。
+- 为兼容 Cline 对 `GET /mcp` 的探测，`src.mcp_server_http` 默认使用 `sse` 并挂载 `/mcp`。
+
+可选环境变量：
+
+```bash
+AI_GATEWAY_MCP_TRANSPORT=sse            # 默认 sse，可改 streamable-http
+AI_GATEWAY_MCP_MOUNT_PATH=/mcp          # 仅 sse 生效
+```
 
 建议架构：
 
