@@ -11,6 +11,7 @@ from src.service import AskOpsService
 
 CONFIG_PATH = "config/metric_map.yaml"
 DEFAULT_KB_PATH = "docs/OEM_Grafana_AI_Gateway_Exadata_Solution_Report.md"
+SERVER_VERSION = "0.1.0"
 
 config = load_metric_config(CONFIG_PATH)
 service = AskOpsService(config)
@@ -70,6 +71,27 @@ def ask_ops(
         "ok": True,
         "session_id": result.session_id,
         "result": result.final_result,
+    }
+
+
+@mcp.tool()
+def health_check() -> dict[str, Any]:
+    """
+    调试与巡检工具：
+    - 验证 MCP 服务是否在线
+    - 验证核心 tools 是否已加载
+    - 回显关键运行配置（脱敏）
+    """
+    return {
+        "ok": True,
+        "server": "ai-gateway-mvp",
+        "version": SERVER_VERSION,
+        "tools": ["health_check", "oem_login", "ask_ops"],
+        "config": {
+            "default_base_url": config.default_base_url,
+            "verify_ssl": config.verify_ssl,
+        },
+        "message": "服务在线，核心工具已加载。",
     }
 
 
