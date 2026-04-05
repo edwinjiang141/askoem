@@ -59,9 +59,19 @@ if _low_level_server is None:
     sys.exit(1)
 
 # ---------- SSE Transport ----------
+# 为什么用 "/messages/"？
+# 1. 设计目标：所有从 Cline 客户端过来的 JSON-RPC 消息都通过 POST /messages/ 这个入口转接。
+# 2. 体现边界：/messages/ 路径下只做消息转发和推送，不暴露具体工具与模型接口。
+# 3. 易于安全管控：可单独做 ACL、限流、审计，不干扰其它 HTTP 路径。
 sse_transport = SseServerTransport("/messages/")
 
-
+# 2. handle_sse 是 SSE 事件流端点处理函数。
+#    - 输入：接收前端 Cline 通过 GET /sse 发起的连接（参数为 request: Request）。
+#    - 处理步骤：
+#         a) 用 sse_transport.connect_sse 方法建立服务器端的 SSE（事件流）连接环境，获取输入输出流。
+#         b) 调用底层的 MCP Server 对象（_low_level_server.run），负责实际消息处理流程，传入读写流与初始化选项。
+#    - 输出：长连接方式按 SSE 协议推送消息给客户端。
+#    - 失败处理：出错时关闭连接（由 Context Manager 自动完成）。
 async def handle_sse(request: Request) -> None:
     """SSE 事件流端点 — Cline 通过 GET /sse 连接"""
     async with sse_transport.connect_sse(
@@ -87,6 +97,13 @@ async def health(request: Request) -> JSONResponse:
         },
     })
 
+
+# 这段代码定义了一个 Starlette 应用实例 app，
+# 设置了 Web 路由表 routes，包含三个端点：
+# 1. "/health" 路由到健康检查接口 health，提供服务存活状态。
+# 2. "/sse" 路由到 handle_sse 异步函数，用于 SSE 事件流连接。
+# 3. "/messages/" 路由到 sse_transport.handle_post_message，处理消息 POST。
+# 这些路由和端点组成了 AI Gateway MCP Server 的 HTTP 接口。
 
 app = Starlette(
     routes=[
