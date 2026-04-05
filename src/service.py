@@ -32,6 +32,13 @@ class AskOpsService:
         self._llm_classifier = LlmIntentClassifier(timeout_seconds=min(config.timeout_seconds, 15))
 
     def login(self, oem_base_url: str, username: str, password: str) -> str:
+        """
+        设计说明：
+        - 输入：oem_base_url，username，password。
+        - 处理：调用 OEM REST API 登录，生成 session，并缓存（session_id）。
+        - 输出：session_id。供后续会话（如 Cline 插件继续提问）复用。后续提问无需重复调用 login，只需传 session_id。
+        - 失败处理：缺少参数或认证失败抛出 ValueError，保证入口调用规范。
+        """
         resolved_base_url = oem_base_url or self._config.default_base_url
         if not resolved_base_url:
             raise ValueError("缺少 oem_base_url，且配置中未设置 default_base_url。")
@@ -41,6 +48,7 @@ class AskOpsService:
             username=username,
             password=password,
         )
+        # 创建会话并缓存，session_id 会被用于后续 CLI/Cline 请求中的复用
         session = self._sessions.create(
             oem_base_url=resolved_base_url,
             username=username,
@@ -256,14 +264,42 @@ class AskOpsService:
             final_result=final_result,
         )
 
+    # 没有用到 self，也不访问类属性，只依赖传入参数，因此适合作为静态方法（@staticmethod）。
     @staticmethod
     def _merge_route_target_type(route_config: dict[str, Any], target_type_name: str) -> dict[str, Any]:
+        """
+        合并路由配置与目标类型名。
+
+        输入:
+          - route_config: 路由配置字典
+          - target_type_name: 目标类型名称（字符串）
+
+        处理步骤:
+          - 拷贝一份 route_config
+          - 写入/覆盖 "target_type_name" 字段
+
+        输出: 合并后的新字典
+        """
         merged = dict(route_config)
         merged["target_type_name"] = target_type_name
         return merged
 
+    # 没有用到 self，也不访问类属性，只依赖传入参数，因此适合作为静态方法（@staticmethod）。
     @staticmethod
     def _format_table(rows: list[dict[str, str]], headers: list[str]) -> str:
+        """
+        遍历 rows 与 headers 生成纯文本表格。
+
+        输入:
+          - rows: 多行字典，每行一个数据
+          - headers: 列名列表
+
+        处理步骤:
+          - 计算每列显示宽度
+          - 输出标题、分隔线及每行内容
+
+        输出: 格式化文本表格（字符串）；如 rows 为空返回"未查询到数据。"
+        """
         if not rows:
             return "未查询到数据。"
         width: dict[str, int] = {h: len(h) for h in headers}

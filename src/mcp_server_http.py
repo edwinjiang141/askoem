@@ -114,10 +114,18 @@ app = Starlette(
 )
 
 
+# 为什么用 uvicorn 启动？
+# - Starlette/FastAPI 等 ASGI 应用只实现协议层逻辑，不提供内置的 HTTP server/job loop。
+# - uvicorn 是主流 async ASGI 服务器，负责监听 0.0.0.0/8000、升级 HTTP/1.1 长链接、事件循环调度等。
+# - 生产/开发都推荐用 uvicorn/gunicorn 这类 server 启动 ASGI 应用，而不是直接 app.run()。
+# - 这样可异步高并发响应请求，并保留标准化、可配置的热重载/多进程能力。
+
 if __name__ == "__main__":
+    # 1. 读取监听地址和端口（支持环境变量覆盖，默认 0.0.0.0:8000）
     host = os.getenv("AI_GATEWAY_MCP_HTTP_HOST", "0.0.0.0").strip() or "0.0.0.0"
     port = int(os.getenv("AI_GATEWAY_MCP_HTTP_PORT", "8000").strip() or "8000")
 
+    # 2. 打印服务启动 banner，明确展示所有端点和配置方法
     banner = (
         f"\n{'='*60}\n"
         f"  AI Gateway MCP Server (SSE)\n"
@@ -133,4 +141,7 @@ if __name__ == "__main__":
     )
     sys.stderr.write(banner)
 
+    # 3. 启动 uvicorn，将 app 挂载为 ASGI 服务
+    #    - 高并发 async 协议栈
+    #    - 统一的 HTTP/1.1 keepalive & SSE 支持
     uvicorn.run(app, host=host, port=port)
